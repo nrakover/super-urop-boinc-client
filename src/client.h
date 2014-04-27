@@ -28,7 +28,7 @@ public:
 
 	void ExportLL(const string &directory_path, long double log_likelihood);
 
-	int LoadParams(const string &params_path, vector<vector<double> > *A,
+	static int LoadParams(vector<vector<double> > *A,
 			vector<vector<vector<double> > > *B, vector<int> *Sig);
 
 	long double PosteriorGivenObs(int j, int y_j, int y_j_plus_1,

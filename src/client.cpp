@@ -10,6 +10,10 @@
 
 #include <cmath>
 #include <fstream>
+#include "boinc_api.h"
+#include "filesys.h"
+
+char* substring(char*, int, int);
 
 namespace alfax {
 
@@ -79,7 +83,7 @@ void Client::PartialLL() {
 					&Alpha_memo_table, &Beta_memo_table);
 		}
 
-		ExportLL("<file name>", log_likelihood);	//TODO: need to specify file
+		ExportLL("loglikelihood.txt", log_likelihood);
 }
 
 void Client::ExportECounts(vector<vector<long double> > *A_counts,
@@ -121,66 +125,69 @@ void Client::ExportLL(const string &dest_file, long double log_likelihood) {
 	f.close();
 }
 
-int Client::LoadParams(const string &params_path, vector<vector<double> > *A,
+int Client::LoadParams(vector<vector<double> > *A,
 		vector<vector<vector<double> > > *B, vector<int> *Sig) {
 
-	string bar = "";
-	if (params_path.substr(params_path.length() - 1,1).compare("/") != 0 )
-		bar = "/";
-	string transitions_path = params_path + bar + "transitions.txt";
-	string emissions_path = params_path + bar + "emissions.txt";
-	string line;
+	string transitions_path = "HMM_EM_transitions";
+	string emissions_path = "HMM_EM_emissions";
+	char* line;
+	unsigned long int len;
+	string resolved_name;
 
-	ifstream params_file;
-	params_file.open(transitions_path.c_str());	// First read transition matrix
+	int retval = boinc_resolve_filename_s(transitions_path.c_str(), resolved_name);
+	if (retval) boinc_finish(retval);
+
+	FILE* params_file = boinc_fopen(resolved_name.c_str(), "w"); // First read transition matrix
 
 	int N = 0;
 	int start = 0;
 	A->resize(1);
-	std::getline(params_file, line);
-	for (int i = 0; i < line.length(); i++) {
-		if (line.substr(i, 1).compare(";") == 0) {
+	getline(&line, &len, params_file);
+	for (int i = 0; i < len; i++) {
+		if (*substring(line, i, 1) == ';') {
 			N++;
-			A->at(0).push_back(atof(line.substr(start, i - start).c_str()));
+			A->at(0).push_back(atof(substring(line, start, i-start)));
 			start = i + 1;
 		}
 	}
 	A->resize(N);
 
 	int row = 1;
-	while (std::getline(params_file, line)) {
+	while (getline(&line, &len, params_file) != -1) {
 		if (row > N - 1)
 			break;
 		int start = 0;
-		for (int i = 0; i < line.length(); i++) {
-			if (line.substr(i, 1).compare(";") == 0) {
+		for (int i = 0; i < len; i++) {
+			if (*substring(line, i, 1) == ';') {
 				A->at(row).push_back(
-						atof(line.substr(start, i - start).c_str()));
+						atof(substring(line, start, i-start)));
 				start = i + 1;
 			}
 		}
 		row++;
 	}
-	params_file.close();
+	fclose(params_file);
 
-	params_file.open(emissions_path.c_str());// Next read the emissions matrix
+	retval = boinc_resolve_filename_s(emissions_path.c_str(), resolved_name);
+	if (retval) boinc_finish(retval);
+	params_file = boinc_fopen(resolved_name.c_str(), "w"); // Next read the emissions matrix
 
 	B->resize(N);
 	row = 1;
-	while (std::getline(params_file, line)) {
+	while (getline(&line, &len, params_file) != -1) {
 		if (row > N - 1)
 			break;
 		B->at(row).resize(1);
 		start = 0;
 		int obs_support = 0;
 		int obs_index = 0;
-		for (int i = 0; i < line.length(); i++) {
-			if (line.substr(i, 1).compare(";") == 0) {
+		for (int i = 0; i < len; i++) {
+			if (*substring(line, i, 1) == ';') {
 				B->at(row).at(obs_index).push_back(
-						atof(line.substr(start, i - start).c_str()));
+						atof(substring(line, start, i-start)));
 				obs_support++;
 				start = i + 1;
-			} else if (line.substr(i, 1).compare("|") == 0) {
+			} else if (*substring(line, i, 1) == '|') {
 				if (row == 1)
 					Sig->push_back(obs_support);
 				obs_index++;
@@ -291,3 +298,22 @@ long double Client::LogBeta(int p, int j,
 }
 
 } // namespace alfax
+
+char *substring(char *string, int position, int length)
+{
+   char* pointer = new char[length+1];
+   int c;
+
+   for (c = 0 ; c < position ; c++)
+      string++;
+
+   for (c = 0 ; c < length ; c++)
+   {
+      *(pointer+c) = *string;
+      string++;
+   }
+
+   *(pointer+c) = '\0';
+
+   return pointer;
+}
